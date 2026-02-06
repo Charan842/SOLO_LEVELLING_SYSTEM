@@ -1,0 +1,16 @@
+/* Global layout helpers for the neon UI */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  box-shadow: 0 0 28px rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(14px);
+}
+
+.glow-text {
+  text-shadow: 0 0 16px rgba(124, 58, 237, 0.55);
+}
+
+.noise-layer {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27120%27 height=%27120%27 viewBox=%270 0 120 120%27%3E%3Cfilter id=%27n%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.8%27 numOctaves=%273%27 stitchTiles=%27stitch%27/%3E%3C/filter%3E%3Crect width=%27120%27 height=%27120%27 filter=%27url(%23n)%27 opacity=%270.35%27/%3E%3C/svg%3E");
+  background-size: 120px 120px;
+}
