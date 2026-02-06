@@ -14,6 +14,7 @@ const Quests = lazy(() => import('./pages/Quests'))
 const Rewards = lazy(() => import('./pages/Rewards'))
 
 const SECTION_STORAGE_KEY = 'solo_leveling_active_section'
+const TRUST_DEVICE_KEY = 'solo_leveling_trusted_device'
 const ACCESS_CODE = '84267'
 
 const sections = [
@@ -96,9 +97,16 @@ const generateParticles = (count) =>
   })
 
 function App() {
-  const [isUnlocked, setIsUnlocked] = useState(false)
+  const [isUnlocked, setIsUnlocked] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem(TRUST_DEVICE_KEY) === 'true'
+  })
   const [accessCode, setAccessCode] = useState('')
   const [accessError, setAccessError] = useState('')
+  const [rememberDevice, setRememberDevice] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem(TRUST_DEVICE_KEY) === 'true'
+  })
   const [activeSection, setActiveSection] = useState(() => {
     if (typeof window === 'undefined') return 'dashboard'
     return window.localStorage.getItem(SECTION_STORAGE_KEY) || 'dashboard'
@@ -123,6 +131,13 @@ function App() {
   const handleUnlock = (event) => {
     event.preventDefault()
     if (accessCode.trim() === ACCESS_CODE) {
+      if (typeof window !== 'undefined') {
+        if (rememberDevice) {
+          window.localStorage.setItem(TRUST_DEVICE_KEY, 'true')
+        } else {
+          window.localStorage.removeItem(TRUST_DEVICE_KEY)
+        }
+      }
       setIsUnlocked(true)
       setAccessError('')
       setAccessCode('')
@@ -283,6 +298,15 @@ function App() {
               {accessError && (
                 <p className="text-center text-xs text-rose-300">{accessError}</p>
               )}
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={rememberDevice}
+                  onChange={(event) => setRememberDevice(event.target.checked)}
+                  className="h-4 w-4 rounded border border-white/20 bg-black/60 text-fuchsia-400 accent-fuchsia-500"
+                />
+                Remember this device
+              </label>
               <button
                 type="submit"
                 className="w-full rounded-xl border border-fuchsia-400/40 bg-fuchsia-500/20 px-4 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-fuchsia-100 transition hover:bg-fuchsia-500/30"
