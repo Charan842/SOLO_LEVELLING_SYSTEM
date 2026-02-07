@@ -182,6 +182,7 @@ function Quests() {
 
   const handleComplete = (id) => {
     const timestamp = new Date().toISOString()
+    const dateKey = timestamp.slice(0, 10)
     const next = quests.map((quest) => {
       if (quest.id !== id) return quest
       return {
@@ -195,8 +196,15 @@ function Quests() {
     if (completed && completed.status === 'active') {
       const bonus = focusId && completed.id === focusId ? Math.ceil(completed.xp * 0.1) : 0
       const totalXp = completed.xp + bonus
-      addXP(totalXp)
-      addGold(completed.gold)
+      addXP(totalXp, {
+        trackHistory: true,
+        dateKey,
+        historyPatch: { questsDoneDelta: 1 },
+      })
+      addGold(completed.gold, {
+        trackHistory: true,
+        dateKey,
+      })
       setLastAction({
         type: 'quest_complete',
         questId: completed.id,
@@ -212,6 +220,7 @@ function Quests() {
 
   const handleFail = (id) => {
     const timestamp = new Date().toISOString()
+    const dateKey = timestamp.slice(0, 10)
     const next = quests.map((quest) => {
       if (quest.id !== id) return quest
       return {
@@ -223,7 +232,12 @@ function Quests() {
     })
     const failed = quests.find((quest) => quest.id === id)
     if (failed && failed.status === 'active') {
-      removeXP(failed.xp)
+      removeXP(failed.xp, {
+        source: 'quest',
+        trackHistory: true,
+        dateKey,
+        historyPatch: { questsFailedDelta: 1 },
+      })
       setLastAction({ type: 'quest_fail', questId: failed.id, xp: failed.xp })
       if (focusId === failed.id) {
         updateFocus('')

@@ -82,8 +82,12 @@ function Rewards() {
     const { onCooldown } = getCooldownInfo(target)
     if (onCooldown) return
     if (gold < target.cost) return
-    spendGold(target.cost)
     const now = new Date().toISOString()
+    const dateKey = now.slice(0, 10)
+    spendGold(target.cost, {
+      trackHistory: true,
+      dateKey,
+    })
     const previousReward = { ...target }
     const next = rewards.map((reward) =>
       reward.id === id
@@ -175,7 +179,7 @@ function Rewards() {
                 key={reward.id}
                 className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100"
               >
-                {reward.title} · {reward.redeemCount || 0}x
+                {reward.title} - {reward.redeemCount || 0}x
               </div>
             ))}
           </div>
@@ -192,7 +196,7 @@ function Rewards() {
               className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-slate-300"
             >
               <span>{entry.title}</span>
-              <span>{entry.cost} G · {entry.at?.slice(0, 10)}</span>
+              <span>{entry.cost} G - {entry.at?.slice(0, 10)}</span>
             </div>
           ))}
         </div>

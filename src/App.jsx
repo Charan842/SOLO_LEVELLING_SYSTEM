@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Gem, Shield, Sparkles, Swords, Timer } from 'lucide-react'
+import { Gem, Shield, Sparkles, Swords, Timer, UserRound } from 'lucide-react'
 import './App.css'
 import LevelUpOverlay from './components/LevelUpOverlay'
 import Navigation from './components/Navigation'
@@ -10,6 +10,7 @@ import { GameProvider } from './context/GameContext'
 const Awakening = lazy(() => import('./pages/Awakening'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Habits = lazy(() => import('./pages/Habits'))
+const Profile = lazy(() => import('./pages/Profile'))
 const Quests = lazy(() => import('./pages/Quests'))
 const Rewards = lazy(() => import('./pages/Rewards'))
 
@@ -19,19 +20,11 @@ const ACCESS_CODE = '84267'
 
 const sections = [
   {
-    id: 'awakening',
-    label: 'Awakening',
-    subtitle: 'Vision & Anti-Vision',
-    icon: Sparkles,
-    accent: 'from-sky-400 via-cyan-300 to-indigo-400',
-    isPrimary: true,
-  },
-  {
-    id: 'habits',
-    label: 'Habits',
-    subtitle: 'Daily Rituals',
-    icon: Shield,
-    accent: 'from-emerald-400 via-teal-300 to-cyan-400',
+    id: 'dashboard',
+    label: 'Gates',
+    subtitle: 'Player Overview',
+    icon: Timer,
+    accent: 'from-rose-400 via-red-400 to-orange-400',
     isPrimary: true,
   },
   {
@@ -43,11 +36,11 @@ const sections = [
     isPrimary: true,
   },
   {
-    id: 'dashboard',
-    label: 'Gates',
-    subtitle: 'Player Overview',
-    icon: Timer,
-    accent: 'from-rose-400 via-red-400 to-orange-400',
+    id: 'habits',
+    label: 'Habits',
+    subtitle: 'Daily Rituals',
+    icon: Shield,
+    accent: 'from-emerald-400 via-teal-300 to-cyan-400',
     isPrimary: true,
   },
   {
@@ -56,16 +49,33 @@ const sections = [
     subtitle: 'Spend Gold',
     icon: Gem,
     accent: 'from-amber-300 via-yellow-300 to-orange-300',
-    isPrimary: false,
+    isPrimary: true,
+  },
+  {
+    id: 'awakening',
+    label: 'Awakening',
+    subtitle: 'Vision & Anti-Vision',
+    icon: Sparkles,
+    accent: 'from-sky-400 via-cyan-300 to-indigo-400',
+    isPrimary: true,
+  },
+  {
+    id: 'profile',
+    label: 'Profile',
+    subtitle: 'Identity & Analytics',
+    icon: UserRound,
+    accent: 'from-indigo-400 via-violet-400 to-fuchsia-400',
+    isPrimary: true,
   },
 ]
 
 const sectionComponents = {
-  awakening: Awakening,
-  habits: Habits,
-  quests: Quests,
   dashboard: Dashboard,
+  quests: Quests,
+  habits: Habits,
   rewards: Rewards,
+  awakening: Awakening,
+  profile: Profile,
 }
 
 const pageVariants = {
@@ -152,7 +162,10 @@ function App() {
   )
 
   const currentSection = useMemo(
-    () => sections.find((section) => section.id === activeSection) || sections[3],
+    () =>
+      sections.find((section) => section.id === activeSection) ||
+      sections.find((section) => section.id === 'dashboard') ||
+      sections[0],
     [activeSection]
   )
 

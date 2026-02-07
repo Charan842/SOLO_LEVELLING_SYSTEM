@@ -1,34 +1,56 @@
 import { motion } from 'framer-motion'
 
+const NAV_ORDER = ['dashboard', 'quests', 'habits', 'rewards', 'awakening', 'profile']
+
 const accentStyles = {
-  awakening: {
-    glow: 'rgba(56,189,248,0.45)',
+  dashboard: {
+    glow: 'rgba(248,113,113,0.45)',
     gradient:
-      'linear-gradient(135deg, rgba(56,189,248,0.7), rgba(34,211,238,0.5), rgba(129,140,248,0.65))',
-  },
-  habits: {
-    glow: 'rgba(16,185,129,0.45)',
-    gradient:
-      'linear-gradient(135deg, rgba(16,185,129,0.7), rgba(45,212,191,0.5), rgba(34,211,238,0.65))',
+      'linear-gradient(135deg, rgba(248,113,113,0.7), rgba(251,113,133,0.5), rgba(251,146,60,0.6))',
   },
   quests: {
     glow: 'rgba(217,70,239,0.45)',
     gradient:
       'linear-gradient(135deg, rgba(217,70,239,0.7), rgba(168,85,247,0.5), rgba(99,102,241,0.6))',
   },
-  dashboard: {
-    glow: 'rgba(248,113,113,0.45)',
+  habits: {
+    glow: 'rgba(16,185,129,0.45)',
     gradient:
-      'linear-gradient(135deg, rgba(248,113,113,0.7), rgba(251,113,133,0.5), rgba(251,146,60,0.6))',
+      'linear-gradient(135deg, rgba(16,185,129,0.7), rgba(45,212,191,0.5), rgba(34,211,238,0.65))',
+  },
+  rewards: {
+    glow: 'rgba(251,191,36,0.45)',
+    gradient:
+      'linear-gradient(135deg, rgba(251,191,36,0.7), rgba(245,158,11,0.55), rgba(249,115,22,0.55))',
+  },
+  awakening: {
+    glow: 'rgba(56,189,248,0.45)',
+    gradient:
+      'linear-gradient(135deg, rgba(56,189,248,0.7), rgba(34,211,238,0.5), rgba(129,140,248,0.65))',
+  },
+  profile: {
+    glow: 'rgba(129,140,248,0.45)',
+    gradient:
+      'linear-gradient(135deg, rgba(129,140,248,0.7), rgba(99,102,241,0.55), rgba(168,85,247,0.55))',
   },
 }
 
+const sortSections = (sections = []) => {
+  return [...sections].sort((a, b) => {
+    const indexA = NAV_ORDER.indexOf(a.id)
+    const indexB = NAV_ORDER.indexOf(b.id)
+    const safeA = indexA === -1 ? Number.MAX_SAFE_INTEGER : indexA
+    const safeB = indexB === -1 ? Number.MAX_SAFE_INTEGER : indexB
+    return safeA - safeB
+  })
+}
+
 function Navigation({ sections, activeSection, onChange }) {
-  const primarySections = sections.filter((section) => section.isPrimary)
+  const orderedSections = sortSections(sections)
 
   return (
-    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      {primarySections.map((section, index) => {
+    <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      {orderedSections.map((section, index) => {
         const Icon = section.icon
         const isActive = activeSection === section.id
         const accent = accentStyles[section.id] || accentStyles.dashboard
@@ -102,3 +124,4 @@ function Navigation({ sections, activeSection, onChange }) {
 }
 
 export default Navigation
+

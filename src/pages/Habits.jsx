@@ -24,56 +24,56 @@ const buildHeatmapDays = (entries) => {
 const defaultHabits = [
   {
     id: 'core-touch-grass',
-    title: 'Touch Grass (Sunlight + Walk) – 10 min',
+    title: 'Touch Grass (Sunlight + Walk) - 10 min',
     xpReward: 25,
     required: true,
     category: 'Core Daily',
   },
   {
     id: 'core-deep-focus',
-    title: 'Deep Focus Session – 50 min',
+    title: 'Deep Focus Session - 50 min',
     xpReward: 35,
     required: true,
     category: 'Core Daily',
   },
   {
     id: 'core-read',
-    title: 'Read (Non-Fiction) – 1–5 pages',
+    title: 'Read (Non-Fiction) - 1-5 pages',
     xpReward: 20,
     required: true,
     category: 'Core Daily',
   },
   {
     id: 'core-skill',
-    title: 'Skill Practice / Learning – 30 min',
+    title: 'Skill Practice / Learning - 30 min',
     xpReward: 30,
     required: true,
     category: 'Core Daily',
   },
   {
     id: 'core-training',
-    title: 'Physical Training – 15–30 min',
+    title: 'Physical Training - 15-30 min',
     xpReward: 30,
     required: true,
     category: 'Core Daily',
   },
   {
     id: 'mind-plan',
-    title: 'Plan Tomorrow – 5 min',
+    title: 'Plan Tomorrow - 5 min',
     xpReward: 15,
     required: true,
     category: 'Mental & Discipline',
   },
   {
     id: 'mind-no-junk',
-    title: 'No Junk Dopamine Before Bed – 30 min',
+    title: 'No Junk Dopamine Before Bed - 30 min',
     xpReward: 25,
     required: true,
     category: 'Mental & Discipline',
   },
   {
     id: 'mind-journal',
-    title: 'Daily Journal – 3 lines',
+    title: 'Daily Journal - 3 lines',
     xpReward: 20,
     required: true,
     category: 'Mental & Discipline',
@@ -87,7 +87,7 @@ const defaultHabits = [
   },
   {
     id: 'elite-meditation',
-    title: 'Meditation – 5–10 min',
+    title: 'Meditation - 5-10 min',
     xpReward: 20,
     required: true,
     category: 'Elite Optional',
@@ -213,7 +213,11 @@ function Habits() {
 
     updateHabits(next)
     if (reward > 0) {
-      addXP(reward)
+      addXP(reward, {
+        trackHistory: true,
+        dateKey: today,
+        historyPatch: { habitsDoneDelta: 1 },
+      })
     }
     if (previousHabit) {
       setLastAction({
@@ -326,7 +330,7 @@ function Habits() {
                   <div>
                     <h3 className="text-lg font-semibold text-white">{habit.title}</h3>
                     <p className="text-xs text-slate-400">
-                      Reward {habit.xpReward} XP · {habit.category || 'Custom'}
+                      Reward {habit.xpReward} XP - {habit.category || 'Custom'}
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-2">

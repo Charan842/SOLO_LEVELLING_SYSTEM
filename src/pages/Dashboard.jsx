@@ -257,8 +257,11 @@ function Dashboard() {
             : quest
         )
       )
-      removeXP(action.xp)
-      spendGold(action.gold)
+      removeXP(action.xp, {
+        ignorePenaltyScale: true,
+        countTotals: false,
+      })
+      spendGold(action.gold, { countTotals: false })
     }
     if (action.type === 'quest_fail') {
       const quests = readStorage('solo_leveling_quests_v1', [])
@@ -270,7 +273,11 @@ function Dashboard() {
             : quest
         )
       )
-      addXP(action.xp)
+      addXP(action.xp, {
+        ignoreMultiplier: true,
+        ignoreDailyCap: true,
+        countTotals: false,
+      })
     }
     if (action.type === 'habit_add') {
       const habits = readStorage('solo_leveling_habits_v1', [])
@@ -289,7 +296,10 @@ function Dashboard() {
         'solo_leveling_habits_v1',
         habits.map((habit) => (habit.id === action.habitId ? action.previousHabit : habit))
       )
-      removeXP(action.xp)
+      removeXP(action.xp, {
+        ignorePenaltyScale: true,
+        countTotals: false,
+      })
     }
     if (action.type === 'reward_redeem') {
       const rewards = readStorage('solo_leveling_rewards_v1', [])
@@ -299,13 +309,20 @@ function Dashboard() {
           reward.id === action.rewardId ? action.previousReward : reward
         )
       )
-      addGold(action.cost)
+      addGold(action.cost, { countTotals: false })
     }
     if (action.type === 'xp_gain') {
-      removeXP(action.amount)
+      removeXP(action.amount, {
+        ignorePenaltyScale: true,
+        countTotals: false,
+      })
     }
     if (action.type === 'xp_loss') {
-      addXP(action.amount)
+      addXP(action.amount, {
+        ignoreMultiplier: true,
+        ignoreDailyCap: true,
+        countTotals: false,
+      })
     }
 
     clearLastAction()
@@ -427,7 +444,7 @@ function Dashboard() {
               <div className="space-y-2">
                 <p className="text-lg font-semibold text-white">{focusQuest.title}</p>
                 <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
-                  {focusQuest.difficulty} · {focusQuest.xp} XP · {focusQuest.gold} G
+                  {focusQuest.difficulty} - {focusQuest.xp} XP - {focusQuest.gold} G
                 </p>
                 <p className="text-xs text-slate-400">
                   Deadline: {focusQuest.deadline || 'No deadline'}

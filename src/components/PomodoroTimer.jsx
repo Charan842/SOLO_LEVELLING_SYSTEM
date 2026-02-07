@@ -36,7 +36,11 @@ function PomodoroTimer() {
     if (secondsLeft !== 0) return
     setIsRunning(false)
     if (mode?.xpReward) {
-      addXP(mode.xpReward)
+      const dateKey = new Date().toISOString().slice(0, 10)
+      addXP(mode.xpReward, {
+        trackHistory: true,
+        dateKey,
+      })
       setLastAction({
         type: 'xp_gain',
         amount: mode.xpReward,
