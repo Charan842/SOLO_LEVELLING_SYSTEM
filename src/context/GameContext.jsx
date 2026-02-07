@@ -1,6 +1,7 @@
 ﻿import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import {
   buildDailyHistory,
+  getAccountAgeDays,
   getDisciplineMetrics,
   resolveFirstUseDate,
   toDateKey,
@@ -14,7 +15,7 @@ const ROLLOVER_KEY = 'solo_leveling_last_rollover_v1'
 const QUESTS_KEY = 'solo_leveling_quests_v1'
 const HABITS_KEY = 'solo_leveling_habits_v1'
 const REWARD_LOG_KEY = 'solo_leveling_reward_log_v1'
-const HISTORY_WINDOW_DAYS = 180
+const MAX_HISTORY_WINDOW_DAYS = 3650
 
 const DEFAULT_PROFILE = {
   playerName: 'Hunter',
@@ -230,29 +231,35 @@ const syncHistoryAndDiscipline = (prevState) => {
   const quests = readStorage(QUESTS_KEY, [])
   const habits = readStorage(HABITS_KEY, [])
   const rewardLog = readStorage(REWARD_LOG_KEY, [])
+  const now = new Date()
+  const firstUseAt =
+    prevState.firstUseAt ||
+    resolveFirstUseDate({
+      state: prevState,
+      quests,
+      habits,
+      rewardLog,
+      dailyHistory: prevState.dailyHistory,
+    })
+  const historyWindowDays = Math.max(
+    1,
+    Math.min(MAX_HISTORY_WINDOW_DAYS, getAccountAgeDays(firstUseAt, now))
+  )
 
   const historyRows = buildDailyHistory({
     habits,
     quests,
     rewardLog,
     dailyHistory: prevState.dailyHistory || {},
-    days: HISTORY_WINDOW_DAYS,
-    endDate: new Date(),
+    days: historyWindowDays,
+    endDate: now,
   })
 
-  const discipline = getDisciplineMetrics(historyRows, new Date())
+  const discipline = getDisciplineMetrics(historyRows, now, firstUseAt)
 
   return {
     ...prevState,
-    firstUseAt:
-      prevState.firstUseAt ||
-      resolveFirstUseDate({
-        state: prevState,
-        quests,
-        habits,
-        rewardLog,
-        dailyHistory: prevState.dailyHistory,
-      }),
+    firstUseAt,
     longestStreak: Math.max(prevState.longestStreak || 0, prevState.streak || 0, discipline.longestStreak),
     daysMissedTotal: discipline.daysMissedTotal,
     perfectDaysCount: discipline.perfectDaysCount,

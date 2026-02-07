@@ -339,10 +339,19 @@ export const buildDailyHistory = ({
     .sort((a, b) => (a.date < b.date ? 1 : -1))
 }
 
-export const getDisciplineMetrics = (historyRows = [], endDate = new Date()) => {
+export const getDisciplineMetrics = (
+  historyRows = [],
+  endDate = new Date(),
+  startDate = ''
+) => {
   const targetDate = toDateKey(endDate)
+  const startKey = toDateKey(startDate)
   const asc = [...historyRows].sort((a, b) => (a.date > b.date ? 1 : -1))
-  const onlyPast = asc.filter((row) => row.date <= targetDate)
+  const onlyPast = asc.filter((row) => {
+    if (row.date > targetDate) return false
+    if (startKey && row.date < startKey) return false
+    return true
+  })
   const keys = onlyPast.map((row) => row.date)
   const byDate = Object.fromEntries(onlyPast.map((row) => [row.date, row]))
 
@@ -412,6 +421,7 @@ export const buildProfileAnalytics = ({
     rewardLog,
     dailyHistory: state.dailyHistory || {},
   })
+  const accountAgeDays = getAccountAgeDays(firstUseAt, endDate)
   const todayKey = toDateKey(endDate)
   const habitToday = getHabitDayStats(habits, todayKey)
   const habitWeek = getHabitRangeStats(habits, 7, endDate)
@@ -423,14 +433,14 @@ export const buildProfileAnalytics = ({
     quests,
     rewardLog,
     dailyHistory: state.dailyHistory || {},
-    days: 120,
+    days: Math.max(1, accountAgeDays),
     endDate,
   })
-  const discipline = getDisciplineMetrics(history, endDate)
+  const discipline = getDisciplineMetrics(history, endDate, firstUseAt)
 
   return {
     identity: {
-      accountAgeDays: getAccountAgeDays(firstUseAt, endDate),
+      accountAgeDays,
       firstUseAt,
     },
     habits: {
@@ -450,4 +460,3 @@ export const buildProfileAnalytics = ({
     },
   }
 }
-
