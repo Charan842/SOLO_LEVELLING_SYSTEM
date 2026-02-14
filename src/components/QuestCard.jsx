@@ -16,7 +16,15 @@ const difficultyStyles = {
   },
 }
 
-function QuestCard({ quest, onComplete, onFail, onDelete, onFocus, isFocus }) {
+function QuestCard({
+  quest,
+  onComplete,
+  onFail,
+  onDelete = () => {},
+  onFocus,
+  isFocus,
+  allowArchive = true,
+}) {
   const difficulty = difficultyStyles[quest.difficulty] || difficultyStyles.Normal
   const statusColor =
     quest.status === 'completed'
@@ -113,13 +121,15 @@ function QuestCard({ quest, onComplete, onFail, onDelete, onFocus, isFocus }) {
                 </button>
               </>
             )}
-            <button
-              type="button"
-              onClick={() => onDelete(quest.id)}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300 transition hover:border-white/30 hover:text-white"
-            >
-              Archive
-            </button>
+            {allowArchive && (
+              <button
+                type="button"
+                onClick={() => onDelete(quest.id)}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300 transition hover:border-white/30 hover:text-white"
+              >
+                Archive
+              </button>
+            )}
           </div>
         </div>
       </div>

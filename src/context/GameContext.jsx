@@ -6,6 +6,7 @@ import {
   resolveFirstUseDate,
   toDateKey,
 } from '../utils/analytics'
+import { installFixedDataOnce } from '../utils/fixedData'
 import { rankFromLevel } from '../utils/rankSystem'
 import { applyXpChange, xpForNextLevel } from '../utils/xpSystem'
 import { readStorage, readString, writeStorage, writeString } from '../utils/storage'
@@ -363,6 +364,12 @@ const applyGoldTransaction = (prevState, requestedDelta, options = {}) => {
 
 export function GameProvider({ children }) {
   const [state, setState] = useState(loadState)
+
+  useEffect(() => {
+    // Install fixed habits/quests once so old localStorage data is reset
+    // before analytics/streak sync runs on a fresh app load.
+    installFixedDataOnce()
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
