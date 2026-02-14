@@ -1,12 +1,23 @@
 ﻿import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import {
+  buildBehaviorInsight,
   buildDailyHistory,
+  buildHabitPatternStats,
+  buildTodayTaskSnapshot,
+  buildWeeklyPerformance,
   getAccountAgeDays,
   getDisciplineMetrics,
   resolveFirstUseDate,
   toDateKey,
+  upsertAnalyticsLog,
+  upsertDailyGrade,
 } from '../utils/analytics'
-import { installFixedDataOnce } from '../utils/fixedData'
+import { evaluateAchievementUnlocks } from '../utils/achievements'
+import {
+  ensureFixedHabits,
+  ensureFixedQuests,
+  installFixedDataOnce,
+} from '../utils/fixedData'
 import { rankFromLevel } from '../utils/rankSystem'
 import { applyXpChange, xpForNextLevel } from '../utils/xpSystem'
 import { readStorage, readString, writeStorage, writeString } from '../utils/storage'
@@ -16,7 +27,9 @@ const ROLLOVER_KEY = 'solo_leveling_last_rollover_v1'
 const QUESTS_KEY = 'solo_leveling_quests_v1'
 const HABITS_KEY = 'solo_leveling_habits_v1'
 const REWARD_LOG_KEY = 'solo_leveling_reward_log_v1'
+const FOCUS_KEY = 'solo_leveling_focus_v1'
 const MAX_HISTORY_WINDOW_DAYS = 3650
+const STATE_SCHEMA_VERSION = 3
 
 const DEFAULT_PROFILE = {
   playerName: 'Hunter',
@@ -34,8 +47,11 @@ const DEFAULT_SETTINGS = {
   questPenalties: true,
   autoFailOverdueQuests: true,
   darkMode: true,
+  themeMode: 'dark',
   glowIntensity: 70,
   reduceAnimations: false,
+  streakWarnings: true,
+  dailyGoalReminders: true,
 }
 
 const penaltyBySeverity = {
@@ -66,32 +82,50 @@ const normalizeProfile = (profile = {}) => ({
   title: String(profile.title || DEFAULT_PROFILE.title).trim() || DEFAULT_PROFILE.title,
 })
 
-const normalizeSettings = (settings = {}) => ({
-  xpMultiplier: Math.max(0.5, Math.min(2, clampNumber(settings.xpMultiplier, DEFAULT_SETTINGS.xpMultiplier))),
-  penaltySeverity: normalizeSeverity(settings.penaltySeverity || DEFAULT_SETTINGS.penaltySeverity),
-  dailyXpCapEnabled: Boolean(settings.dailyXpCapEnabled),
-  dailyXpCap: Math.max(0, clampInt(settings.dailyXpCap, 0, 5000)),
-  habitPenalties:
-    settings.habitPenalties === undefined ? DEFAULT_SETTINGS.habitPenalties : Boolean(settings.habitPenalties),
-  streakResetOnMiss:
-    settings.streakResetOnMiss === undefined
-      ? DEFAULT_SETTINGS.streakResetOnMiss
-      : Boolean(settings.streakResetOnMiss),
-  habitReminder:
-    settings.habitReminder === undefined ? DEFAULT_SETTINGS.habitReminder : Boolean(settings.habitReminder),
-  questPenalties:
-    settings.questPenalties === undefined ? DEFAULT_SETTINGS.questPenalties : Boolean(settings.questPenalties),
-  autoFailOverdueQuests:
-    settings.autoFailOverdueQuests === undefined
-      ? DEFAULT_SETTINGS.autoFailOverdueQuests
-      : Boolean(settings.autoFailOverdueQuests),
-  darkMode: settings.darkMode === undefined ? DEFAULT_SETTINGS.darkMode : Boolean(settings.darkMode),
-  glowIntensity: clampInt(settings.glowIntensity, 0, 100),
-  reduceAnimations:
-    settings.reduceAnimations === undefined
-      ? DEFAULT_SETTINGS.reduceAnimations
-      : Boolean(settings.reduceAnimations),
-})
+const normalizeThemeMode = (value, darkModeFallback = true) => {
+  if (value === 'light' || value === 'dark') return value
+  return darkModeFallback ? 'dark' : 'light'
+}
+
+const normalizeSettings = (settings = {}) => {
+  const inferredTheme = normalizeThemeMode(settings.themeMode, settings.darkMode !== false)
+  return {
+    xpMultiplier: Math.max(0.5, Math.min(2, clampNumber(settings.xpMultiplier, DEFAULT_SETTINGS.xpMultiplier))),
+    penaltySeverity: normalizeSeverity(settings.penaltySeverity || DEFAULT_SETTINGS.penaltySeverity),
+    dailyXpCapEnabled: Boolean(settings.dailyXpCapEnabled),
+    dailyXpCap: Math.max(0, clampInt(settings.dailyXpCap, 0, 5000)),
+    habitPenalties:
+      settings.habitPenalties === undefined ? DEFAULT_SETTINGS.habitPenalties : Boolean(settings.habitPenalties),
+    streakResetOnMiss:
+      settings.streakResetOnMiss === undefined
+        ? DEFAULT_SETTINGS.streakResetOnMiss
+        : Boolean(settings.streakResetOnMiss),
+    habitReminder:
+      settings.habitReminder === undefined ? DEFAULT_SETTINGS.habitReminder : Boolean(settings.habitReminder),
+    questPenalties:
+      settings.questPenalties === undefined ? DEFAULT_SETTINGS.questPenalties : Boolean(settings.questPenalties),
+    autoFailOverdueQuests:
+      settings.autoFailOverdueQuests === undefined
+        ? DEFAULT_SETTINGS.autoFailOverdueQuests
+        : Boolean(settings.autoFailOverdueQuests),
+    darkMode:
+      settings.darkMode === undefined ? inferredTheme === 'dark' : Boolean(settings.darkMode),
+    themeMode: inferredTheme,
+    glowIntensity: clampInt(settings.glowIntensity, 0, 100),
+    reduceAnimations:
+      settings.reduceAnimations === undefined
+        ? DEFAULT_SETTINGS.reduceAnimations
+        : Boolean(settings.reduceAnimations),
+    streakWarnings:
+      settings.streakWarnings === undefined
+        ? DEFAULT_SETTINGS.streakWarnings
+        : Boolean(settings.streakWarnings),
+    dailyGoalReminders:
+      settings.dailyGoalReminders === undefined
+        ? DEFAULT_SETTINGS.dailyGoalReminders
+        : Boolean(settings.dailyGoalReminders),
+  }
+}
 
 const normalizeHistoryRow = (row = {}) => ({
   xpGained: Math.max(0, clampNumber(row.xpGained, 0)),
@@ -145,6 +179,7 @@ const applyXpDelta = (state, delta) => {
 const createDefaultState = () => {
   const now = new Date().toISOString()
   return {
+    schemaVersion: STATE_SCHEMA_VERSION,
     historyVersion: 2,
     xp: 0,
     level: 1,
@@ -160,9 +195,43 @@ const createDefaultState = () => {
     daysMissedTotal: 0,
     perfectDaysCount: 0,
     dailyHistory: {},
+    gradingHistory: {},
+    analyticsLog: [],
+    unlockedAchievements: {},
+    behaviorInsights: {
+      title: '',
+      message: '',
+      severity: 'low',
+      taskId: '',
+      taskTitle: '',
+    },
+    todaySummary: null,
+    weeklyPerformance: {
+      daily: [],
+      totalTasksCompleted: 0,
+      weeklyXP: 0,
+      averageCompletion: 0,
+      bestDay: null,
+      worstDay: null,
+    },
     profile: DEFAULT_PROFILE,
     settings: DEFAULT_SETTINGS,
   }
+}
+
+const clearAllForSchemaReset = () => {
+  if (typeof window === 'undefined') return
+  ;[
+    STORAGE_KEY,
+    QUESTS_KEY,
+    HABITS_KEY,
+    REWARD_LOG_KEY,
+    'solo_leveling_rewards_v1',
+    FOCUS_KEY,
+    ROLLOVER_KEY,
+    'solo_leveling_daily_seed_v1',
+    'solo_leveling_fixed_lists_v1_installed',
+  ].forEach((key) => window.localStorage.removeItem(key))
 }
 
 const loadState = () => {
@@ -170,8 +239,18 @@ const loadState = () => {
     return createDefaultState()
   }
 
+  installFixedDataOnce()
+
   const parsed = readStorage(STORAGE_KEY, null)
   if (!parsed) return createDefaultState()
+
+  if (Number(parsed.schemaVersion || 0) !== STATE_SCHEMA_VERSION) {
+    // Schema mismatch means old persisted structures are no longer reliable.
+    // We clear and reset to avoid mixed-version analytics/grade corruption.
+    clearAllForSchemaReset()
+    installFixedDataOnce()
+    return createDefaultState()
+  }
 
   const level = Math.max(1, clampInt(parsed.level, 1, 100000))
   const xp = Math.max(0, clampNumber(parsed.xp, 0))
@@ -194,19 +273,16 @@ const loadState = () => {
       dailyHistory: parsed.dailyHistory || {},
     })
 
-  const parsedHistoryVersion = clampInt(parsed.historyVersion, 0, 99)
-  const safeDailyHistory =
-    parsedHistoryVersion >= 2
-      ? Object.fromEntries(
-          Object.entries(parsed.dailyHistory || {}).map(([dateKey, row]) => [
-            dateKey,
-            normalizeHistoryRow(row),
-          ])
-        )
-      : {}
+  const safeDailyHistory = Object.fromEntries(
+    Object.entries(parsed.dailyHistory || {}).map(([dateKey, row]) => [
+      dateKey,
+      normalizeHistoryRow(row),
+    ])
+  )
 
   return {
-    historyVersion: 2,
+    ...createDefaultState(),
+    schemaVersion: STATE_SCHEMA_VERSION,
     xp,
     level,
     gold,
@@ -221,12 +297,18 @@ const loadState = () => {
     daysMissedTotal: Math.max(0, clampInt(parsed.daysMissedTotal, 0, 100000)),
     perfectDaysCount: Math.max(0, clampInt(parsed.perfectDaysCount, 0, 100000)),
     dailyHistory: safeDailyHistory,
+    gradingHistory: parsed.gradingHistory || {},
+    analyticsLog: Array.isArray(parsed.analyticsLog) ? parsed.analyticsLog : [],
+    unlockedAchievements: parsed.unlockedAchievements || {},
+    behaviorInsights: parsed.behaviorInsights || createDefaultState().behaviorInsights,
+    todaySummary: parsed.todaySummary || null,
+    weeklyPerformance: parsed.weeklyPerformance || createDefaultState().weeklyPerformance,
     profile: normalizeProfile(parsed.profile),
     settings: normalizeSettings(parsed.settings),
   }
 }
 
-const syncHistoryAndDiscipline = (prevState) => {
+const syncDerivedSystems = (prevState) => {
   if (typeof window === 'undefined') return prevState
 
   const quests = readStorage(QUESTS_KEY, [])
@@ -242,6 +324,7 @@ const syncHistoryAndDiscipline = (prevState) => {
       rewardLog,
       dailyHistory: prevState.dailyHistory,
     })
+
   const historyWindowDays = Math.max(
     1,
     Math.min(MAX_HISTORY_WINDOW_DAYS, getAccountAgeDays(firstUseAt, now))
@@ -258,12 +341,47 @@ const syncHistoryAndDiscipline = (prevState) => {
 
   const discipline = getDisciplineMetrics(historyRows, now, firstUseAt)
 
+  const todaySummary = buildTodayTaskSnapshot({
+    habits,
+    quests,
+    dailyHistory: prevState.dailyHistory || {},
+    date: now,
+    settings: prevState.settings,
+  })
+
+  const gradingHistory = upsertDailyGrade(prevState.gradingHistory || {}, todaySummary)
+  const analyticsLog = upsertAnalyticsLog(prevState.analyticsLog || [], todaySummary, 200)
+
+  const weeklyPerformance = buildWeeklyPerformance({
+    historyRows,
+    gradingHistory,
+    endDate: now,
+  })
+
+  const habitPatternStats = buildHabitPatternStats({ habits, days: 30, endDate: now })
+  const behaviorInsights = buildBehaviorInsight({ habitPatternStats })
+
+  const unlockedAchievements = evaluateAchievementUnlocks({
+    unlocked: prevState.unlockedAchievements || {},
+    discipline,
+    weeklyPerformance,
+    gradingHistory,
+    historyRows,
+    now,
+  })
+
   return {
     ...prevState,
     firstUseAt,
     longestStreak: Math.max(prevState.longestStreak || 0, prevState.streak || 0, discipline.longestStreak),
     daysMissedTotal: discipline.daysMissedTotal,
     perfectDaysCount: discipline.perfectDaysCount,
+    gradingHistory,
+    analyticsLog,
+    unlockedAchievements,
+    behaviorInsights,
+    todaySummary,
+    weeklyPerformance,
   }
 }
 
@@ -366,12 +484,6 @@ export function GameProvider({ children }) {
   const [state, setState] = useState(loadState)
 
   useEffect(() => {
-    // Install fixed habits/quests once so old localStorage data is reset
-    // before analytics/streak sync runs on a fresh app load.
-    installFixedDataOnce()
-  }, [])
-
-  useEffect(() => {
     if (typeof window === 'undefined') return
     writeStorage(STORAGE_KEY, state)
   }, [state])
@@ -379,12 +491,20 @@ export function GameProvider({ children }) {
   useEffect(() => {
     if (typeof window === 'undefined') return
 
+    const themeMode = state.settings?.themeMode === 'light' ? 'light' : 'dark'
+    document.documentElement.setAttribute('data-theme', themeMode)
+    document.documentElement.style.colorScheme = themeMode
+  }, [state.settings?.themeMode])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
     const sync = () => {
-      setState((prev) => syncHistoryAndDiscipline(prev))
+      setState((prev) => syncDerivedSystems(prev))
     }
 
     sync()
-    const timer = setInterval(sync, 15 * 60 * 1000)
+    const timer = setInterval(sync, 60 * 1000)
     return () => clearInterval(timer)
   }, [])
 
@@ -455,6 +575,18 @@ export function GameProvider({ children }) {
         }
       }
 
+      // Quests are fixed daily missions, so they rearm each new day.
+      const resetQuests = ensureFixedQuests(readStorage(QUESTS_KEY, [])).map((quest) => ({
+        ...quest,
+        status: 'active',
+        deadline: today,
+        completedAt: null,
+        failedAt: null,
+        updatedAt: nowIso,
+      }))
+      writeStorage(QUESTS_KEY, resetQuests)
+      writeString(FOCUS_KEY, '')
+
       if (xpPenalty > 0 && todaySettings.questPenalties) {
         setState((prev) =>
           applyXpTransaction(prev, -xpPenalty, {
@@ -469,7 +601,7 @@ export function GameProvider({ children }) {
       }
 
       writeString(ROLLOVER_KEY, today)
-      setState((prev) => syncHistoryAndDiscipline(prev))
+      setState((prev) => syncDerivedSystems(prev))
     }
 
     runRollover()
@@ -477,18 +609,24 @@ export function GameProvider({ children }) {
     return () => clearInterval(timer)
   }, [state.settings])
 
+  const refreshDailySystems = () => {
+    setState((prev) => syncDerivedSystems(prev))
+  }
+
   const addXP = (amount, meta = {}) => {
     const value = clampNumber(amount, 0)
     if (value <= 0) return
     setState((prev) =>
-      applyXpTransaction(prev, value, {
-        trackHistory: Boolean(meta.trackHistory),
-        historyPatch: meta.historyPatch,
-        dateKey: meta.dateKey,
-        ignoreMultiplier: Boolean(meta.ignoreMultiplier),
-        ignoreDailyCap: Boolean(meta.ignoreDailyCap),
-        countTotals: meta.countTotals,
-      })
+      syncDerivedSystems(
+        applyXpTransaction(prev, value, {
+          trackHistory: Boolean(meta.trackHistory),
+          historyPatch: meta.historyPatch,
+          dateKey: meta.dateKey,
+          ignoreMultiplier: Boolean(meta.ignoreMultiplier),
+          ignoreDailyCap: Boolean(meta.ignoreDailyCap),
+          countTotals: meta.countTotals,
+        })
+      )
     )
   }
 
@@ -501,13 +639,15 @@ export function GameProvider({ children }) {
     if (meta.source === 'quest' && !settings.questPenalties && !meta.forcePenalty) return
 
     setState((prev) =>
-      applyXpTransaction(prev, -value, {
-        trackHistory: Boolean(meta.trackHistory),
-        historyPatch: meta.historyPatch,
-        dateKey: meta.dateKey,
-        ignorePenaltyScale: Boolean(meta.ignorePenaltyScale),
-        countTotals: meta.countTotals,
-      })
+      syncDerivedSystems(
+        applyXpTransaction(prev, -value, {
+          trackHistory: Boolean(meta.trackHistory),
+          historyPatch: meta.historyPatch,
+          dateKey: meta.dateKey,
+          ignorePenaltyScale: Boolean(meta.ignorePenaltyScale),
+          countTotals: meta.countTotals,
+        })
+      )
     )
   }
 
@@ -515,12 +655,14 @@ export function GameProvider({ children }) {
     const value = clampNumber(amount, 0)
     if (value <= 0) return
     setState((prev) =>
-      applyGoldTransaction(prev, value, {
-        trackHistory: Boolean(meta.trackHistory),
-        historyPatch: meta.historyPatch,
-        dateKey: meta.dateKey,
-        countTotals: meta.countTotals,
-      })
+      syncDerivedSystems(
+        applyGoldTransaction(prev, value, {
+          trackHistory: Boolean(meta.trackHistory),
+          historyPatch: meta.historyPatch,
+          dateKey: meta.dateKey,
+          countTotals: meta.countTotals,
+        })
+      )
     )
   }
 
@@ -528,12 +670,14 @@ export function GameProvider({ children }) {
     const value = clampNumber(amount, 0)
     if (value <= 0) return
     setState((prev) =>
-      applyGoldTransaction(prev, -value, {
-        trackHistory: Boolean(meta.trackHistory),
-        historyPatch: meta.historyPatch,
-        dateKey: meta.dateKey,
-        countTotals: meta.countTotals,
-      })
+      syncDerivedSystems(
+        applyGoldTransaction(prev, -value, {
+          trackHistory: Boolean(meta.trackHistory),
+          historyPatch: meta.historyPatch,
+          dateKey: meta.dateKey,
+          countTotals: meta.countTotals,
+        })
+      )
     )
   }
 
@@ -569,9 +713,17 @@ export function GameProvider({ children }) {
   }
 
   const updateSettings = (patch = {}) => {
+    const normalizedPatch = { ...patch }
+    if (Object.prototype.hasOwnProperty.call(patch, 'darkMode') && !Object.prototype.hasOwnProperty.call(patch, 'themeMode')) {
+      normalizedPatch.themeMode = patch.darkMode ? 'dark' : 'light'
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'themeMode') && !Object.prototype.hasOwnProperty.call(patch, 'darkMode')) {
+      normalizedPatch.darkMode = patch.themeMode !== 'light'
+    }
+
     setState((prev) => ({
       ...prev,
-      settings: normalizeSettings({ ...prev.settings, ...patch }),
+      settings: normalizeSettings({ ...prev.settings, ...normalizedPatch }),
     }))
   }
 
@@ -580,12 +732,15 @@ export function GameProvider({ children }) {
     setState(base)
 
     if (typeof window === 'undefined') return
-    writeStorage(QUESTS_KEY, [])
-    writeStorage(HABITS_KEY, [])
+
+    writeStorage(QUESTS_KEY, ensureFixedQuests([]))
+    writeStorage(HABITS_KEY, ensureFixedHabits([]))
     window.localStorage.removeItem('solo_leveling_rewards_v1')
     window.localStorage.removeItem(REWARD_LOG_KEY)
-    writeString('solo_leveling_focus_v1', '')
+    writeString(FOCUS_KEY, '')
     writeString(ROLLOVER_KEY, toDateKey(new Date()))
+
+    setState((prev) => syncDerivedSystems(prev))
   }
 
   const nextLevelXP = useMemo(() => xpForNextLevel(state.level), [state.level])
@@ -611,6 +766,12 @@ export function GameProvider({ children }) {
     daysMissedTotal: state.daysMissedTotal,
     perfectDaysCount: state.perfectDaysCount,
     dailyHistory: state.dailyHistory,
+    gradingHistory: state.gradingHistory,
+    analyticsLog: state.analyticsLog,
+    unlockedAchievements: state.unlockedAchievements,
+    behaviorInsights: state.behaviorInsights,
+    todaySummary: state.todaySummary,
+    weeklyPerformance: state.weeklyPerformance,
     profile: state.profile,
     settings: state.settings,
     addXP,
@@ -620,6 +781,7 @@ export function GameProvider({ children }) {
     setStreak,
     incrementStreak,
     resetStreak,
+    refreshDailySystems,
     updateProfile,
     updateSettings,
     resetAllData,

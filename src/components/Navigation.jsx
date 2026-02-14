@@ -1,12 +1,26 @@
 import { motion } from 'framer-motion'
 
-const NAV_ORDER = ['dashboard', 'quests', 'habits', 'rewards', 'awakening', 'profile']
+const NAV_ORDER = [
+  'dashboard',
+  'today',
+  'quests',
+  'habits',
+  'rewards',
+  'awakening',
+  'weekly',
+  'profile',
+]
 
 const accentStyles = {
   dashboard: {
     glow: 'rgba(248,113,113,0.45)',
     gradient:
       'linear-gradient(135deg, rgba(248,113,113,0.7), rgba(251,113,133,0.5), rgba(251,146,60,0.6))',
+  },
+  today: {
+    glow: 'rgba(34,211,238,0.45)',
+    gradient:
+      'linear-gradient(135deg, rgba(34,211,238,0.72), rgba(59,130,246,0.55), rgba(99,102,241,0.6))',
   },
   quests: {
     glow: 'rgba(217,70,239,0.45)',
@@ -33,6 +47,11 @@ const accentStyles = {
     gradient:
       'linear-gradient(135deg, rgba(129,140,248,0.7), rgba(99,102,241,0.55), rgba(168,85,247,0.55))',
   },
+  weekly: {
+    glow: 'rgba(59,130,246,0.45)',
+    gradient:
+      'linear-gradient(135deg, rgba(59,130,246,0.7), rgba(99,102,241,0.55), rgba(147,51,234,0.55))',
+  },
 }
 
 const sortSections = (sections = []) => {
@@ -49,7 +68,7 @@ function Navigation({ sections, activeSection, onChange }) {
   const orderedSections = sortSections(sections)
 
   return (
-    <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-8">
       {orderedSections.map((section, index) => {
         const Icon = section.icon
         const isActive = activeSection === section.id
@@ -124,4 +143,3 @@ function Navigation({ sections, activeSection, onChange }) {
 }
 
 export default Navigation
-

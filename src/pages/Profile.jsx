@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   AlertTriangle,
@@ -8,6 +8,8 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Line,
   LineChart,
@@ -16,10 +18,16 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import AchievementCard from '../components/AchievementCard'
 import AnalyticsCards from '../components/AnalyticsCards'
 import ProfileStats from '../components/ProfileStats'
 import SettingsPanel from '../components/SettingsPanel'
 import { useGame } from '../context/GameContext'
+import {
+  buildAchievementList,
+  countUnlockedAchievements,
+  latestUnlock,
+} from '../utils/achievements'
 import { buildProfileAnalytics } from '../utils/analytics'
 import { readStorage } from '../utils/storage'
 
@@ -55,6 +63,9 @@ function Profile() {
     totalXPEarned,
     firstUseAt,
     dailyHistory,
+    gradingHistory,
+    unlockedAchievements,
+    behaviorInsights,
     profile,
     settings,
     updateProfile,
@@ -64,7 +75,7 @@ function Profile() {
   } = useGame()
 
   const [snapshot, setSnapshot] = useState(readSnapshot)
-  const [trendWindow, setTrendWindow] = useState('7d')
+  const [trendWindow, setTrendWindow] = useState('30d')
 
   useEffect(() => {
     const refresh = () => {
@@ -78,12 +89,12 @@ function Profile() {
   const analytics = useMemo(
     () =>
       buildProfileAnalytics({
-        state: { firstUseAt, dailyHistory },
+        state: { firstUseAt, dailyHistory, gradingHistory },
         quests: snapshot.quests,
         habits: snapshot.habits,
         rewardLog: snapshot.rewardLog,
       }),
-    [firstUseAt, dailyHistory, snapshot]
+    [firstUseAt, dailyHistory, gradingHistory, snapshot]
   )
 
   const discipline = useMemo(
@@ -100,6 +111,15 @@ function Profile() {
   const trendData = trendWindow === '30d' ? analytics.trends.thirtyDay : analytics.trends.sevenDay
   const historyRows = analytics.history.slice(0, 45)
 
+  const unlockedMap = useMemo(() => unlockedAchievements || {}, [unlockedAchievements])
+
+  const achievementList = useMemo(() => buildAchievementList(unlockedMap), [unlockedMap])
+  const unlockedCount = useMemo(() => countUnlockedAchievements(unlockedMap), [unlockedMap])
+  const latestBadge = useMemo(() => latestUnlock(unlockedMap), [unlockedMap])
+
+  const habitPattern = analytics.habits?.pattern || { chartData: [], mostCompleted: null, mostSkipped: null }
+  const behavior = behaviorInsights?.message ? behaviorInsights : analytics.behaviorInsight
+
   return (
     <div className="space-y-6">
       <ProfileStats
@@ -113,6 +133,55 @@ function Profile() {
       />
 
       <AnalyticsCards habits={analytics.habits} quests={analytics.quests} />
+
+      <section className="grid gap-6 lg:grid-cols-4">
+        <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+          <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Weekly Habit Rate</p>
+          <p className="mt-2 text-2xl font-semibold text-emerald-100">
+            {analytics.habits.week.completionPercent}%
+          </p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+          <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Most Completed Habit</p>
+          <p className="mt-2 text-sm font-semibold text-cyan-100">
+            {habitPattern.mostCompleted?.title || 'No data yet'}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+          <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Most Skipped Habit</p>
+          <p className="mt-2 text-sm font-semibold text-rose-100">
+            {habitPattern.mostSkipped?.title || 'No data yet'}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+          <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Badges Unlocked</p>
+          <p className="mt-2 text-2xl font-semibold text-fuchsia-100">{unlockedCount}</p>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/85 via-black/80 to-slate-950/85 p-6 shadow-[0_0_24px_rgba(236,72,153,0.2)]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Behavior Insight</p>
+            <h3 className="mt-2 text-xl font-semibold text-white">Pattern Detection</h3>
+            <p className="mt-2 text-sm text-slate-300">{behavior?.message || 'No insight available yet.'}</p>
+          </div>
+          {latestBadge && (
+            <div className="rounded-xl border border-emerald-400/35 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100">
+              Latest badge: {latestBadge.title}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/85 via-black/80 to-slate-950/85 p-6 shadow-[0_0_24px_rgba(129,140,248,0.22)]">
+        <h3 className="text-xl font-semibold text-white">Achievements & Badges</h3>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {achievementList.map((achievement) => (
+            <AchievementCard key={achievement.id} achievement={achievement} />
+          ))}
+        </div>
+      </section>
 
       <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/85 via-black/80 to-slate-950/85 p-6 shadow-[0_0_28px_rgba(251,113,133,0.22)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -136,10 +205,7 @@ function Profile() {
         </div>
 
         <div className="mt-5 grid gap-4 md:grid-cols-4">
-          <motion.div
-            whileHover={{ y: -3 }}
-            className="rounded-2xl border border-white/10 bg-black/45 p-4"
-          >
+          <motion.div whileHover={{ y: -3 }} className="rounded-2xl border border-white/10 bg-black/45 p-4">
             <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Current</p>
             <p className="mt-2 flex items-center gap-2 text-2xl font-semibold text-white">
               <Flame className="h-6 w-6 text-orange-300" />
@@ -147,30 +213,19 @@ function Profile() {
             </p>
           </motion.div>
 
-          <motion.div
-            whileHover={{ y: -3 }}
-            className="rounded-2xl border border-white/10 bg-black/45 p-4"
-          >
+          <motion.div whileHover={{ y: -3 }} className="rounded-2xl border border-white/10 bg-black/45 p-4">
             <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Longest</p>
             <p className="mt-2 text-2xl font-semibold text-white">{discipline.longestStreak}</p>
           </motion.div>
 
-          <motion.div
-            whileHover={{ y: -3 }}
-            className="rounded-2xl border border-white/10 bg-black/45 p-4"
-          >
+          <motion.div whileHover={{ y: -3 }} className="rounded-2xl border border-white/10 bg-black/45 p-4">
             <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Missed Days</p>
             <p className="mt-2 text-2xl font-semibold text-rose-200">{discipline.daysMissedTotal}</p>
           </motion.div>
 
-          <motion.div
-            whileHover={{ y: -3 }}
-            className="rounded-2xl border border-white/10 bg-black/45 p-4"
-          >
+          <motion.div whileHover={{ y: -3 }} className="rounded-2xl border border-white/10 bg-black/45 p-4">
             <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Perfect Days</p>
-            <p className="mt-2 text-2xl font-semibold text-emerald-200">
-              {discipline.perfectDaysCount}
-            </p>
+            <p className="mt-2 text-2xl font-semibold text-emerald-200">{discipline.perfectDaysCount}</p>
           </motion.div>
         </div>
       </section>
@@ -227,13 +282,7 @@ function Profile() {
                       color: '#e2e8f0',
                     }}
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="xpGained"
-                    stroke="#d946ef"
-                    strokeWidth={2}
-                    dot={false}
-                  />
+                  <Line type="monotone" dataKey="xpGained" stroke="#d946ef" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -258,13 +307,7 @@ function Profile() {
                       color: '#e2e8f0',
                     }}
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="habitsCompletionPercent"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    dot={false}
-                  />
+                  <Line type="monotone" dataKey="habitsCompletionPercent" stroke="#10b981" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -289,17 +332,40 @@ function Profile() {
                       color: '#e2e8f0',
                     }}
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="questsCompletionPercent"
-                    stroke="#f59e0b"
-                    strokeWidth={2}
-                    dot={false}
-                  />
+                  <Line type="monotone" dataKey="questsCompletionPercent" stroke="#f59e0b" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/85 via-black/80 to-slate-950/85 p-6 shadow-[0_0_22px_rgba(16,185,129,0.18)]">
+        <h3 className="text-xl font-semibold text-white">Habit Pattern (30 Days)</h3>
+        <div className="mt-4 h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={habitPattern.chartData || []}>
+              <CartesianGrid stroke="rgba(148,163,184,0.12)" vertical={false} />
+              <XAxis
+                dataKey="title"
+                stroke="#94a3b8"
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value) => (value.length > 10 ? `${value.slice(0, 10)}...` : value)}
+              />
+              <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} />
+              <Tooltip
+                contentStyle={{
+                  background: 'rgba(2,6,23,0.9)',
+                  border: '1px solid rgba(148,163,184,0.2)',
+                  borderRadius: '12px',
+                  color: '#e2e8f0',
+                }}
+              />
+              <Bar dataKey="completed" fill="#22c55e" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="skipped" fill="#fb7185" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </section>
 
@@ -352,4 +418,3 @@ function Profile() {
 }
 
 export default Profile
-

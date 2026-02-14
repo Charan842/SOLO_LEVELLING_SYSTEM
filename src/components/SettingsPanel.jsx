@@ -262,11 +262,44 @@ function SettingsPanel({
             UI Settings
           </div>
           <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-xl border border-white/10 bg-black/35 px-3 py-2">
+              <p className="text-sm text-slate-100">Theme Mode</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateSetting('themeMode', 'dark')}
+                  className={`rounded-lg border px-2 py-1 text-xs font-semibold uppercase tracking-[0.15em] transition ${
+                    settings.themeMode !== 'light'
+                      ? 'border-indigo-400/40 bg-indigo-400/20 text-indigo-100'
+                      : 'border-white/10 bg-white/5 text-slate-300'
+                  }`}
+                >
+                  Dark
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateSetting('themeMode', 'light')}
+                  className={`rounded-lg border px-2 py-1 text-xs font-semibold uppercase tracking-[0.15em] transition ${
+                    settings.themeMode === 'light'
+                      ? 'border-indigo-400/40 bg-indigo-400/20 text-indigo-100'
+                      : 'border-white/10 bg-white/5 text-slate-300'
+                  }`}
+                >
+                  Light
+                </button>
+              </div>
+            </div>
             <ToggleRow
-              label="Dark Mode"
-              hint="Default visual mode."
-              checked={Boolean(settings.darkMode)}
-              onChange={(value) => updateSetting('darkMode', value)}
+              label="Streak Warnings"
+              hint="Warn after 7 PM when tasks remain."
+              checked={Boolean(settings.streakWarnings)}
+              onChange={(value) => updateSetting('streakWarnings', value)}
+            />
+            <ToggleRow
+              label="Daily Goal Reminders"
+              hint="Show reminder copy when tasks are pending."
+              checked={Boolean(settings.dailyGoalReminders)}
+              onChange={(value) => updateSetting('dailyGoalReminders', value)}
             />
             <ToggleRow
               label="Reduce Animations"
@@ -305,4 +338,3 @@ function SettingsPanel({
 }
 
 export default SettingsPanel
-

@@ -1,4 +1,4 @@
-const DAY_MS = 24 * 60 * 60 * 1000
+﻿const DAY_MS = 24 * 60 * 60 * 1000
 
 const numberOrZero = (value) => {
   const next = Number(value)
@@ -89,6 +89,50 @@ const trailingRun = (keys, checker) => {
     count += 1
   }
   return count
+}
+
+const suggestionForTask = (taskTitle = '') => {
+  const title = String(taskTitle).toLowerCase()
+  if (title.includes('meditation')) {
+    return 'You struggle with meditation; try a 2-minute breathing round before increasing duration.'
+  }
+  if (title.includes('communication')) {
+    return 'Communication is slipping; schedule one short speaking drill immediately after class.'
+  }
+  if (title.includes('workout') || title.includes('walk')) {
+    return 'Movement consistency is low; set a non-negotiable minimum like 10 minutes today.'
+  }
+  if (title.includes('leetcode') || title.includes('pyq')) {
+    return 'Study execution is inconsistent; start with one easy warm-up before the main block.'
+  }
+  return 'This task is being skipped often; lower friction and lock a fixed start time tomorrow.'
+}
+
+export const gradeFromPercent = (percent) => {
+  const safe = clampPercent(percent)
+  if (safe >= 100) return 'S'
+  if (safe >= 80) return 'A'
+  if (safe >= 60) return 'B'
+  if (safe >= 40) return 'C'
+  return 'F'
+}
+
+export const gradeToScore = (grade) => {
+  const value = String(grade || '').toUpperCase()
+  if (value === 'S') return 5
+  if (value === 'A') return 4
+  if (value === 'B') return 3
+  if (value === 'C') return 2
+  return 1
+}
+
+export const scoreToGrade = (score) => {
+  const safe = Math.round(numberOrZero(score))
+  if (safe >= 5) return 'S'
+  if (safe >= 4) return 'A'
+  if (safe >= 3) return 'B'
+  if (safe >= 2) return 'C'
+  return 'F'
 }
 
 export const toDateKey = (value = new Date()) => {
@@ -407,6 +451,235 @@ export const buildPerformanceSeries = ({
   })
 }
 
+export const buildTodayTaskSnapshot = ({
+  habits = [],
+  quests = [],
+  dailyHistory = {},
+  date = new Date(),
+  settings = {},
+} = {}) => {
+  const dateKey = toDateKey(date)
+  const hour = date.getHours()
+
+  const habitTasks = habits.map((habit) => {
+    const done = numberOrZero((habit.history || {})[dateKey]) > 0
+    return {
+      id: habit.id,
+      type: 'habit',
+      title: habit.title,
+      status: done ? 'completed' : 'pending',
+      xpReward: numberOrZero(habit.xpReward),
+    }
+  })
+
+  const questTasks = quests.map((quest) => {
+    const completedToday = toDateKey(quest.completedAt) === dateKey
+    const failedToday = toDateKey(quest.failedAt) === dateKey
+    return {
+      id: quest.id,
+      type: 'quest',
+      title: quest.title,
+      status: completedToday ? 'completed' : failedToday ? 'failed' : 'pending',
+      difficulty: normalizeDifficulty(quest.difficulty),
+      xpReward: numberOrZero(quest.xp),
+      goldReward: numberOrZero(quest.gold),
+    }
+  })
+
+  const tasks = [...habitTasks, ...questTasks]
+  const totalTasks = tasks.length
+  const completedTasks = tasks.filter((item) => item.status === 'completed').length
+  const failedTasks = tasks.filter((item) => item.status === 'failed').length
+  const pendingTasks = Math.max(0, totalTasks - completedTasks)
+  const completionPercent = toPercent(completedTasks, totalTasks)
+  const grade = gradeFromPercent(completionPercent)
+  const historyRow = normalizeDayRecord(dateKey, dailyHistory[dateKey], habits.length)
+
+  const warningsEnabled = settings.streakWarnings !== false
+  const atRisk = Boolean(warningsEnabled && hour >= 19 && pendingTasks > 0)
+
+  return {
+    date: dateKey,
+    tasks,
+    totalTasks,
+    completedTasks,
+    failedTasks,
+    pendingTasks,
+    completionPercent,
+    grade,
+    xpGained: historyRow.xpGained,
+    xpLost: historyRow.xpLost,
+    goldGained: historyRow.goldGained,
+    goldSpent: historyRow.goldSpent,
+    atRisk,
+    warningMessage: atRisk
+      ? 'Streak risk: it is after 7 PM and some tasks are still incomplete.'
+      : '',
+  }
+}
+
+export const buildWeeklyPerformance = ({
+  historyRows = [],
+  gradingHistory = {},
+  endDate = new Date(),
+} = {}) => {
+  const keys = getDateRangeKeys(7, endDate)
+  const historyByDate = Object.fromEntries((historyRows || []).map((row) => [row.date, row]))
+  const gradeByDate = gradingHistory || {}
+
+  const daily = keys.map((dateKey) => {
+    const history = historyByDate[dateKey] || buildEmptyDay(dateKey, 0)
+    const gradeRow = gradeByDate[dateKey] || {}
+    const tasksCompleted = numberOrZero(gradeRow.tasksCompleted)
+      || numberOrZero(history.habitsDone + history.questsDone)
+    const fallbackTotal = numberOrZero(history.totalHabits + history.questsDone + history.questsFailed)
+    const tasksTotal = numberOrZero(gradeRow.tasksTotal) || fallbackTotal
+    const completionPercent = numberOrZero(gradeRow.completionPercent)
+      || toPercent(tasksCompleted, tasksTotal)
+    const grade = gradeRow.grade || gradeFromPercent(completionPercent)
+
+    return {
+      date: dateKey,
+      label: formatDateLabel(dateKey, 'weekly'),
+      tasksCompleted,
+      tasksTotal,
+      completionPercent,
+      grade,
+      gradeScore: gradeToScore(grade),
+      xpGained: numberOrZero(history.xpGained),
+      goldGained: numberOrZero(history.goldGained),
+    }
+  })
+
+  const totalTasksCompleted = daily.reduce((sum, row) => sum + row.tasksCompleted, 0)
+  const weeklyXP = daily.reduce((sum, row) => sum + row.xpGained, 0)
+  const averageCompletion = toPercent(
+    daily.reduce((sum, row) => sum + row.completionPercent, 0),
+    daily.length * 100
+  )
+
+  const bestDay = [...daily].sort((a, b) => b.completionPercent - a.completionPercent)[0] || null
+  const worstDay = [...daily].sort((a, b) => a.completionPercent - b.completionPercent)[0] || null
+
+  return {
+    daily,
+    totalTasksCompleted,
+    weeklyXP,
+    averageCompletion,
+    bestDay,
+    worstDay,
+  }
+}
+
+export const buildHabitPatternStats = ({
+  habits = [],
+  days = 30,
+  endDate = new Date(),
+} = {}) => {
+  const keys = getDateRangeKeys(days, endDate)
+  if (!keys.length || !habits.length) {
+    return {
+      chartData: [],
+      mostCompleted: null,
+      mostSkipped: null,
+    }
+  }
+
+  const chartData = habits.map((habit) => {
+    const done = keys.reduce(
+      (sum, key) => sum + (numberOrZero((habit.history || {})[key]) > 0 ? 1 : 0),
+      0
+    )
+    const skipped = Math.max(0, keys.length - done)
+    return {
+      id: habit.id,
+      title: habit.title,
+      completed: done,
+      skipped,
+      completionRate: toPercent(done, keys.length),
+    }
+  })
+
+  const mostCompleted = [...chartData].sort((a, b) => b.completed - a.completed)[0] || null
+  const mostSkipped = [...chartData].sort((a, b) => b.skipped - a.skipped)[0] || null
+
+  return {
+    chartData,
+    mostCompleted,
+    mostSkipped,
+  }
+}
+
+export const buildBehaviorInsight = ({
+  habitPatternStats = {},
+} = {}) => {
+  const mostSkipped = habitPatternStats.mostSkipped
+  if (!mostSkipped) {
+    return {
+      title: 'No Skip Pattern Yet',
+      message: 'Keep logging daily progress to unlock behavior insights.',
+      severity: 'low',
+      taskId: '',
+    }
+  }
+
+  const severity = mostSkipped.skipped >= 10 ? 'high' : mostSkipped.skipped >= 5 ? 'medium' : 'low'
+
+  return {
+    title: 'Behavior Insight',
+    message: suggestionForTask(mostSkipped.title),
+    severity,
+    taskId: mostSkipped.id,
+    taskTitle: mostSkipped.title,
+    skippedCount: mostSkipped.skipped,
+  }
+}
+
+export const upsertDailyGrade = (gradingHistory = {}, summary = {}) => {
+  const dateKey = summary.date || toDateKey(new Date())
+  return {
+    ...gradingHistory,
+    [dateKey]: {
+      date: dateKey,
+      grade: summary.grade || gradeFromPercent(summary.completionPercent),
+      completionPercent: clampPercent(summary.completionPercent),
+      tasksCompleted: numberOrZero(summary.completedTasks),
+      tasksTotal: numberOrZero(summary.totalTasks),
+      xpGained: numberOrZero(summary.xpGained),
+      goldGained: numberOrZero(summary.goldGained),
+      atRisk: Boolean(summary.atRisk),
+      updatedAt: new Date().toISOString(),
+    },
+  }
+}
+
+export const upsertAnalyticsLog = (analyticsLog = [], summary = {}, limit = 120) => {
+  const dateKey = summary.date || toDateKey(new Date())
+  const next = [
+    {
+      date: dateKey,
+      completionPercent: clampPercent(summary.completionPercent),
+      grade: summary.grade || gradeFromPercent(summary.completionPercent),
+      tasksCompleted: numberOrZero(summary.completedTasks),
+      tasksTotal: numberOrZero(summary.totalTasks),
+      xpGained: numberOrZero(summary.xpGained),
+      xpLost: numberOrZero(summary.xpLost),
+      goldGained: numberOrZero(summary.goldGained),
+      goldSpent: numberOrZero(summary.goldSpent),
+      completedTaskIds: (summary.tasks || [])
+        .filter((task) => task.status === 'completed')
+        .map((task) => task.id),
+      skippedTaskIds: (summary.tasks || [])
+        .filter((task) => task.status !== 'completed')
+        .map((task) => task.id),
+      updatedAt: new Date().toISOString(),
+    },
+    ...(analyticsLog || []).filter((entry) => entry.date !== dateKey),
+  ]
+
+  return next.slice(0, limit)
+}
+
 export const buildProfileAnalytics = ({
   state = {},
   quests = [],
@@ -437,6 +710,13 @@ export const buildProfileAnalytics = ({
     endDate,
   })
   const discipline = getDisciplineMetrics(history, endDate, firstUseAt)
+  const habitPatternStats = buildHabitPatternStats({ habits, days: 30, endDate })
+  const behaviorInsight = buildBehaviorInsight({ habitPatternStats })
+  const weeklyPerformance = buildWeeklyPerformance({
+    historyRows: history,
+    gradingHistory: state.gradingHistory || {},
+    endDate,
+  })
 
   return {
     identity: {
@@ -447,6 +727,7 @@ export const buildProfileAnalytics = ({
       today: habitToday,
       week: habitWeek,
       month: habitMonth,
+      pattern: habitPatternStats,
     },
     quests: {
       today: questToday,
@@ -454,6 +735,8 @@ export const buildProfileAnalytics = ({
     },
     discipline,
     history,
+    behaviorInsight,
+    weeklyPerformance,
     trends: {
       sevenDay: buildPerformanceSeries({ historyRows: history, days: 7, endDate }),
       thirtyDay: buildPerformanceSeries({ historyRows: history, days: 30, endDate }),

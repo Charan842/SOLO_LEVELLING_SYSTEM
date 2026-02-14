@@ -1,6 +1,15 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Gem, Shield, Sparkles, Swords, Timer, UserRound } from 'lucide-react'
+import {
+  CalendarCheck2,
+  Gem,
+  LineChart,
+  Shield,
+  Sparkles,
+  Swords,
+  Timer,
+  UserRound,
+} from 'lucide-react'
 import './App.css'
 import LevelUpOverlay from './components/LevelUpOverlay'
 import Navigation from './components/Navigation'
@@ -13,6 +22,8 @@ const Habits = lazy(() => import('./pages/Habits'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Quests = lazy(() => import('./pages/Quests'))
 const Rewards = lazy(() => import('./pages/Rewards'))
+const TodayDashboard = lazy(() => import('./pages/TodayDashboard'))
+const WeeklySummary = lazy(() => import('./pages/WeeklySummary'))
 
 const SECTION_STORAGE_KEY = 'solo_leveling_active_section'
 const TRUST_DEVICE_KEY = 'solo_leveling_trusted_device'
@@ -25,6 +36,14 @@ const sections = [
     subtitle: 'Player Overview',
     icon: Timer,
     accent: 'from-rose-400 via-red-400 to-orange-400',
+    isPrimary: true,
+  },
+  {
+    id: 'today',
+    label: 'Today',
+    subtitle: 'Daily Grade & Risk',
+    icon: CalendarCheck2,
+    accent: 'from-cyan-300 via-sky-400 to-indigo-400',
     isPrimary: true,
   },
   {
@@ -67,15 +86,25 @@ const sections = [
     accent: 'from-indigo-400 via-violet-400 to-fuchsia-400',
     isPrimary: true,
   },
+  {
+    id: 'weekly',
+    label: 'Weekly',
+    subtitle: '7-Day Performance',
+    icon: LineChart,
+    accent: 'from-blue-300 via-indigo-400 to-purple-400',
+    isPrimary: true,
+  },
 ]
 
 const sectionComponents = {
   dashboard: Dashboard,
+  today: TodayDashboard,
   quests: Quests,
   habits: Habits,
   rewards: Rewards,
   awakening: Awakening,
   profile: Profile,
+  weekly: WeeklySummary,
 }
 
 const pageVariants = {
